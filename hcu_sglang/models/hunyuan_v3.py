@@ -85,7 +85,11 @@ try:
 except ImportError:
     from sglang.srt.layers.utils.layer_list import make_layers
 from sglang.srt.utils.common import LazyValue
-from sglang.srt.utils.hf_transformers_utils import get_rope_config
+try:
+    from sglang.srt.utils.hf_transformers_utils import get_rope_config
+except ImportError:
+    # 1be97a0: hf helpers moved into the srt.hf_transformers package
+    from sglang.srt.hf_transformers.common import get_rope_config
 
 from hcu_sglang.utils.detection import is_hcu as is_hcu
 

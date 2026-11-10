@@ -37,7 +37,10 @@ from sglang.srt.multimodal.processors.base_processor import (
 )
 from sglang.srt.runtime_context import get_mm, get_model
 from sglang.srt.utils.hf_transformers.common import resolve_runai_obj_uri
-from sglang.srt.utils.hf_transformers_utils import resolve_image_processor_backend
+try:
+    from sglang.srt.utils.hf_transformers_utils import resolve_image_processor_backend
+except ImportError:
+    from sglang.srt.hf_transformers.processor import resolve_image_processor_backend
 from sglang.srt.utils.video_decoder import VideoDecoderWrapper
 
 logger = logging.getLogger(__name__)

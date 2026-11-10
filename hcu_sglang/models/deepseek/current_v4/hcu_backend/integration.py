@@ -596,7 +596,12 @@ def register_hooks():
     # Import the complete owned graph before applying class replacements.
     owned={module:import_module(module) for _,module,_ in _FORMAL+_COMPATIBILITY}
     for original,module,name in _COMPATIBILITY:
-        target=import_module(original)
+        try:
+            target=import_module(original)
+        except ImportError:
+            # target module absent on this sglang pin (e.g. dsv4.quant_k_cache
+            # only exists in the fork): nothing upstream to inject into.
+            continue
         if not hasattr(target,name):
             setattr(target,name,getattr(owned[module],name))
     for target,module,name in _FORMAL:

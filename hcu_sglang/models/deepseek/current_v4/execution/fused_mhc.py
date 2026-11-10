@@ -22,7 +22,10 @@ from sglang.srt.runtime_context import (
 )
 from sglang.srt.utils import get_bool_env_var, is_gfx95_supported, is_hip
 from hcu_sglang.utils.detection import is_hcu as is_hcu
-from sglang.srt.utils.common import is_gfx1250_supported
+try:
+    from sglang.srt.utils.common import is_gfx1250_supported
+except ImportError:
+    from sglang.srt.utils.device import is_gfx1250_supported
 
 logger = logging.getLogger(__name__)
 

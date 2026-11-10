@@ -15,6 +15,53 @@ from sglang.srt.speculative.dspark_components import dspark_config as C
 globals().update({name: value for name, value in vars(M).items() if not name.startswith("__")})
 globals().update({name: value for name, value in vars(I).items() if not name.startswith("__")})
 globals().update({name: value for name, value in vars(W).items() if not name.startswith("__")})
+try:
+    # 1be97a0: this helper moved to layers.moe.utils; bind it so _bind() can
+    # inject it into the upstream M runtime namespace.
+    from sglang.srt.layers.moe.utils import is_shared_experts_fusion_disabled  # noqa: F401
+except ImportError:
+    pass
+try:
+    # 1be97a0: W (dspark_worker_v2) dropped this re-export; source it directly
+    from sglang.srt.speculative.spec_utils import (  # noqa: F401
+        prepare_mamba_track_for_verify,
+    )
+except ImportError:
+    pass
+try:
+    _is_hip  # noqa: F821
+except NameError:
+    from sglang.srt.utils import is_hip as _is_hip_fn
+
+    _is_hip = _is_hip_fn()
+try:
+    from sglang.srt.speculative.dspark_components.dspark_config import (  # noqa: F401
+        draft_is_deepseek_v4,
+    )
+except ImportError:
+    # ported verbatim from sglang v0.5.22 (srt/speculative/dspark_components/dspark_config.py)
+    def draft_is_deepseek_v4() -> bool:
+        import json
+
+        from sglang.srt.configs.model_config import is_deepseek_v4
+        from sglang.srt.runtime_context import get_model, get_spec
+
+        try:
+            from sglang.srt.utils.hf_transformers_utils import get_config
+        except ImportError:
+            from sglang.srt.hf_transformers.common import get_config
+
+        draft_model_path = get_spec().speculative_draft_model_path
+        if not draft_model_path:
+            return False
+        draft_hf_config = get_config(
+            draft_model_path,
+            trust_remote_code=get_model().trust_remote_code,
+            revision=get_spec().speculative_draft_model_revision,
+            model_override_args=json.loads(get_model().json_model_override_args),
+            model_config_parser=get_model().model_config_parser,
+        )
+        return draft_hf_config is not None and is_deepseek_v4(draft_hf_config)
 from sglang.srt.distributed.parallel_state import model_parallel_is_initialized
 from sglang.srt.layers.layer_boundary import layer_stack
 from sglang.srt.layers.layer_boundary.residual import batch as residual_batch

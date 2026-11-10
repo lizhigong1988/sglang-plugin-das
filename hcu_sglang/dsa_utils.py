@@ -10,9 +10,14 @@ from sglang.srt.layers.attention.dsa import utils as U
 from hcu_sglang.utils.detection import is_hcu
 from hcu_sglang.layers.attention.current_dsa.forward_batch_utils import effective_forward_mode
 from sglang.srt.utils.common import ceil_align
-from sglang.kernels.ops.attention.dsa.cp_split import (
-    dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel,
-)
+try:
+    from sglang.kernels.ops.attention.dsa.cp_split import (
+        dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel,
+    )
+except ImportError:
+    from sglang.kernels.ops.attention.dsa.cp_split import (
+        _dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel,
+    )
 
 
 def should_remap_pd_dsa_seed_to_local_slots() -> bool:

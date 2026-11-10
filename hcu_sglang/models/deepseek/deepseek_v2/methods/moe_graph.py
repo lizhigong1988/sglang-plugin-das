@@ -46,7 +46,11 @@ def _mega_moe_capture_stub(
     # live token count -- the shape this stub must match.
     return N0.torch.zeros_like(hidden_states)
 
-_bcg_forward_mega_moe = eager_on_graph(True, capture_stub=_mega_moe_capture_stub)(_mega_moe_eager_body)
+try:
+    _bcg_forward_mega_moe = eager_on_graph(True, on_capture=_mega_moe_capture_stub)(_mega_moe_eager_body)
+except TypeError:
+    # sglang v0.5.22 spells this kwarg capture_stub
+    _bcg_forward_mega_moe = eager_on_graph(True, capture_stub=_mega_moe_capture_stub)(_mega_moe_eager_body)
 
 class MergedMoEOutput(N0.MoEOutput):
     """Merged routed rows with a replicated shared output still separate."""

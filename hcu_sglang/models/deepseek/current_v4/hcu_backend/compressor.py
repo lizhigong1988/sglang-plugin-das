@@ -6,7 +6,21 @@ import torch
 import torch.nn as nn
 from sglang.kernels.fused_op import BaseFusedOp
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.attn import triton_create_paged_compress_data
-from sglang.kernels.ops.attention.dsv4.compress_old import CompressorDecodePlan, CompressorPrefillPlan, compress_forward, compress_fused_norm_rope_inplace
+try:
+    from sglang.kernels.ops.attention.dsv4.compress_old import CompressorDecodePlan, CompressorPrefillPlan, compress_forward, compress_fused_norm_rope_inplace
+except ImportError:
+    # this pin ships the plans/forward in dsv4.compress; the CUDA-only
+    # compress_fused_norm_rope_inplace re-export is fork-only (HIP path uses hip_* ops)
+    from sglang.kernels.ops.attention.dsv4.compress import (
+        CompressorDecodePlan,
+        CompressorPrefillPlan,
+        compress_forward,
+    )
+
+    def compress_fused_norm_rope_inplace(*args, **kwargs):
+        raise NotImplementedError(
+            "compress_fused_norm_rope_inplace (CUDA fallback) unavailable on this sglang pin"
+        )
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.quant_k_cache import quant_to_nope_fp8_rope_bf16_pack_lightop, quant_to_nope_fp8_rope_bf16_pack_triton
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.bf16_fp32 import linear_bf16_fp32
 from sglang.srt.configs.deepseek_v4 import DeepSeekV4Config
@@ -23,7 +37,26 @@ from hcu_sglang.mem_cache.hcu_v4_pool import DeepSeekV4TokenToKVPool
 from sglang.srt.model_executor.forward_context import get_attn_backend
 from sglang.srt.models.deepseek_v2 import _use_aiter
 from sglang.srt.runtime_context import get_exec
-from sglang.srt.utils import add_prefix, get_bool_env_var, is_hip, is_npu, set_weight_attrs
+try:
+    from sglang.srt.utils import add_prefix
+except ImportError:
+    from sglang.srt.layers.utils.common import add_prefix
+try:
+    from sglang.srt.utils import get_bool_env_var
+except ImportError:
+    from sglang.srt.utils.common import get_bool_env_var
+try:
+    from sglang.srt.utils import is_hip
+except ImportError:
+    from sglang.srt.utils.device import is_hip
+try:
+    from sglang.srt.utils import is_npu
+except ImportError:
+    from sglang.srt.utils.device import is_npu
+try:
+    from sglang.srt.utils import set_weight_attrs
+except ImportError:
+    from sglang.srt.layers.utils.common import set_weight_attrs
 from hcu_sglang.utils.detection import is_hcu as is_hcu
 _is_hcu = is_hcu()
 _is_hip = is_hip()

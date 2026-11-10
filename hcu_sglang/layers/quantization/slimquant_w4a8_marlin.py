@@ -55,7 +55,14 @@ from sglang.srt.layers.quantization.compressed_tensors.utils import (
 )
 from hcu_sglang.layers.quantization.slimquant_w4a8 import SlimQuantW4A8Int8LinearMethod
 from hcu_sglang.layers.quantization.w4a8_utils import w4a8_weight_repack_impl
-from sglang.srt.utils import get_bool_env_var, set_weight_attrs
+try:
+    from sglang.srt.utils import get_bool_env_var
+except ImportError:
+    from sglang.srt.utils.common import get_bool_env_var
+try:
+    from sglang.srt.layers.utils.common import set_weight_attrs
+except ImportError:
+    from sglang.srt.utils import set_weight_attrs
 from hcu_sglang.utils.detection import is_hcu as is_hcu
 
 _is_hcu = is_hcu()

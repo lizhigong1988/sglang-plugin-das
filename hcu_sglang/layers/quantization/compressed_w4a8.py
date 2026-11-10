@@ -20,7 +20,10 @@ import torch
 import torch.nn.functional as F
 from sglang.srt.layers.quantization.base_config import FusedMoEMethodBase
 from sglang.srt.layers.moe.utils import get_deepep_mode
-from sglang.srt.utils import set_weight_attrs
+try:
+    from sglang.srt.layers.utils.common import set_weight_attrs
+except ImportError:
+    from sglang.srt.utils import set_weight_attrs
 from hcu_sglang.layers.quantization.w4a8_utils import w4a8_weight_repack_impl
 
 logger = logging.getLogger(__name__)

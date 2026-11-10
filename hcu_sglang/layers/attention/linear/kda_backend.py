@@ -7,6 +7,12 @@ from typing import Optional, Tuple, Union
 import sglang.srt.layers.attention.linear.kda_backend as K
 import sglang.srt.layers.attention.hybrid_linear_attn_backend as H
 import sglang.srt.layers.attention.mamba.mamba2_metadata as MD
+try:
+    # 1be97a0 hosts the aiter HIP fused KDA decode op under kernels.ops.attention;
+    # bind it here so _bind() can inject it into the upstream K runtime namespace.
+    from sglang.kernels.ops.attention import kda_fused_decode_aiter_hip  # noqa: F401
+except ImportError:
+    pass
 
 globals().update({name: value for name, value in vars(K).items() if not name.startswith("__")})
 globals().update({name: value for name, value in vars(H).items() if not name.startswith("__")})

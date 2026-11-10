@@ -17,7 +17,10 @@ from hcu_sglang.models.deepseek.current_v4.hcu_backend.lightop_indexer import li
 from sglang.kernels.ops.attention.dsv4.kv_layout import KVLayout
 from sglang.kernels.ops.attention.dsv4.metadata_kernel import fill_all_compressed_indices
 from sglang.kernels.ops.attention.dsv4.metadata_kernel import init_compression_metadata as _init_compression_metadata_triton
-from sglang.kernels.ops.attention.dsv4.online_c128_mtp import OnlineC128MTPController
+try:
+    from sglang.kernels.ops.attention.dsv4.online_c128_mtp import OnlineC128MTPController
+except ImportError:
+    from sglang.srt.layers.attention.dsv4.online_c128_mtp import OnlineC128MTPController
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.quant_k_cache import quant_to_nope_fp8_rope_bf16_pack_lightop, quant_to_nope_fp8_rope_bf16_pack_triton
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.attn_metadata_kernels import BuildCausalSwaPageIndices, BuildPageTablePositions, ExpandPrefillCausally, late_layer_tail_layout, late_layer_tail_lens
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.dspark_attn_metadata import BuildBlockSeqLensCausal, BuildDsparkSwaPageIndices, BuildDsparkSwaRingIndices, ComputeDsparkWindowGather, swa_ring_rows
@@ -49,14 +52,34 @@ from hcu_sglang.models.deepseek.current_v4.hcu_backend.compat import is_capturin
 from sglang.srt.model_executor.runner_backend_utils.tc_piecewise_cuda_graph import get_tc_piecewise_forward_context
 from sglang.srt.runtime_context import get_disagg, get_exec, get_parallel, get_platform, get_spec
 from sglang.srt.speculative.eagle_utils import per_step_draft_out_cache_loc
-from sglang.srt.speculative.ragged_verify import RaggedVerifyMode, compute_target_verify_graph_key, compute_uniform_extend_lengths, read_ragged_verify_mode, resolve_ragged_verify_layout
+from sglang.srt.speculative.ragged_verify import (
+    RaggedVerifyMode,
+    compute_target_verify_graph_key,
+    compute_uniform_extend_lengths,
+    read_ragged_verify_mode,
+)
+try:
+    from sglang.srt.speculative.ragged_verify import resolve_ragged_verify_layout
+except ImportError:
+    # ported verbatim from sglang v0.5.22 (srt/speculative/ragged_verify.py)
+    def resolve_ragged_verify_layout(forward_batch):
+        spec_info = getattr(forward_batch, "spec_info", None)
+        if spec_info is None:
+            return None
+        return spec_info.ragged_verify_layout
 from sglang.srt.utils import ceil_align, get_bool_env_var, is_cuda, is_xpu
 from hcu_sglang.utils.detection import is_hcu as is_hcu
-from sglang.srt.utils.common import is_sm120_supported
+try:
+    from sglang.srt.utils.common import is_sm120_supported
+except ImportError:
+    from sglang.srt.utils.device import is_sm120_supported
 _is_hcu = is_hcu()
 _is_sm120 = is_sm120_supported()
 _use_dpskv4_lightop_quant_k_cache = get_bool_env_var('SGLANG_USE_DPSKV4_LIGHTOP_QUANT_K_CACHE')
-from sglang.srt.utils.common import async_h2d
+try:
+    from sglang.srt.utils.common import async_h2d
+except ImportError:
+    from sglang.srt.utils.device import async_h2d
 if TYPE_CHECKING:
     from sgl_kernel.flash_mla import FlashMLASchedMeta
     from sglang.srt.layers.radix_attention import RadixAttention

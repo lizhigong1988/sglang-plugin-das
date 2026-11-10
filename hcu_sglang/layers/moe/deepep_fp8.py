@@ -28,7 +28,10 @@ from hcu_sglang.utils.detection import is_hcu
 from hcu_sglang.layers.moe import deepep_current as D
 from sglang.srt.runtime_context import get_disagg
 from hcu_sglang.layers.moe.deepep_ep_kernels import ep_scatter, ep_gather, build_m_indices_triton
-from sglang.srt.utils.offloader import get_offloader
+try:
+    from sglang.srt.utils.offloader import get_offloader
+except ImportError:
+    from sglang.srt.layers.offloader import get_offloader
 from sglang.srt.layers.moe.moe_runner.deep_gemm import copy_list_to_gpu_no_ce
 from lightop import moe as lightop_op
 from lightop.activation import fuse_silu_mul_fp8_quant, fuse_silu_mul_fp8_quant_ep

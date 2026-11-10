@@ -10,7 +10,10 @@ if TYPE_CHECKING:
 from typing import List, Tuple
 import torch
 from sglang.srt.runtime_context import get_parallel
-from sglang.kernels.ops.attention.dsa.cp_split import dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel
+try:
+    from sglang.kernels.ops.attention.dsa.cp_split import dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel
+except ImportError:
+    from sglang.kernels.ops.attention.dsa.cp_split import _dsa_cp_interleave_q_seqs_kernel as dsa_cp_round_robin_split_q_seqs_kernel
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.compat import is_dsa_prefill_cp_round_robin_split, dsa_cp_round_robin_split_data
 from hcu_sglang.layers.attention.current_dsa.forward_batch_utils import effective_forward_mode
 

@@ -9,47 +9,16 @@ from hcu_sglang.disagg.transport_hidden_events import PDHiddenEventManager
 from hcu_sglang.disagg.transport_source_drain import SourceDrainTracker
 from hcu_sglang.mem_cache.cp_cache_layer_split.transfer import encode_v4_transfer_metadata, decode_v4_transfer_metadata
 from hcu_sglang.utils.detection import is_hcu
-from sglang.srt.utils.common import get_bool_env_var
+try:
+    from sglang.srt.utils import get_bool_env_var
+except ImportError:
+    from sglang.srt.utils.common import get_bool_env_var
 
-from sglang.srt.disaggregation.mooncake.conn import (
-    ABORT_ACK_TAG,
-    AbortNotification,
-    DecodeStagingContext,
-    Dict,
-    DisaggregationMode,
-    KVArgs,
-    KVPoll,
-    List,
-    MooncakeKVManager,
-    MooncakeRequestStage,
-    NetworkAddress,
-    Optional,
-    PrefillStagingContext,
-    ServerArgs,
-    Set,
-    TraceNullContext,
-    TraceReqContext,
-    Tuple,
-    Union,
-    _validate_efa_allocator_compatibility,
-    check_mooncake_custom_mem_pool_enabled,
-    concurrent,
-    defaultdict,
-    envs,
-    get_observability,
-    handle_staging_rsp,
-    handle_watermark_msg,
-    logger,
-    mooncake_trace_func,
-    np,
-    npt,
-    os,
-    pack_int_lists,
-    struct,
-    threading,
-    time,
-    zmq,
-)
+try:
+    from sglang.srt.disaggregation.mooncake.conn import zmq
+except ImportError:
+    from sglang.srt.disaggregation.common.conn import zmq
+from sglang.srt.disaggregation.mooncake.conn import (ABORT_ACK_TAG, AbortNotification, DecodeStagingContext, Dict, DisaggregationMode, KVArgs, KVPoll, List, MooncakeKVManager, MooncakeRequestStage, NetworkAddress, Optional, PrefillStagingContext, ServerArgs, Set, TraceNullContext, TraceReqContext, Tuple, Union, _validate_efa_allocator_compatibility, check_mooncake_custom_mem_pool_enabled, concurrent, defaultdict, envs, get_observability, handle_staging_rsp, handle_watermark_msg, logger, mooncake_trace_func, np, npt, os, pack_int_lists, struct, threading, time,)
 from hcu_sglang.disagg.utils import build_transfer_entry_pairs
 _is_hcu = is_hcu()
 # default mirrors hcu_sglang.environ (single source): official layout unless

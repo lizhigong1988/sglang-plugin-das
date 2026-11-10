@@ -15,7 +15,14 @@ from sglang.kernels.ops.gemm.router_gemv_hip import rocm_gemv_split_k_max_tokens
 from sglang.kernels.ops.layernorm.rmsnorm_fp32 import rmsnorm_fp32
 from sglang.srt.layers.linear import ReplicatedLinear
 from sglang.srt.layers.quantization.base_config import QuantizationConfig
-from sglang.srt.utils import add_prefix, is_gfx95_supported
+try:
+    from sglang.srt.utils import add_prefix
+except ImportError:
+    from sglang.srt.layers.utils.common import add_prefix
+try:
+    from sglang.srt.utils import is_gfx95_supported
+except ImportError:
+    from sglang.srt.utils.device import is_gfx95_supported
 from hcu_sglang.utils.detection import is_hcu as is_hcu
 _is_hcu = is_hcu()
 

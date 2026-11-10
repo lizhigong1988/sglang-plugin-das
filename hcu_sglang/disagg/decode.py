@@ -136,9 +136,23 @@ from sglang.srt.runtime_context import (
     get_memory,
     get_parallel,
 )
-from sglang.srt.utils import ceil_align, get_num_new_pages, is_npu
+try:
+    from sglang.srt.utils import ceil_align
+except ImportError:
+    from sglang.srt.utils.common import ceil_align
+try:
+    from sglang.srt.utils import get_num_new_pages
+except ImportError:
+    from sglang.srt.mem_cache.utils import get_num_new_pages
+try:
+    from sglang.srt.utils import is_npu
+except ImportError:
+    from sglang.srt.utils.device import is_npu
 from hcu_sglang.utils.detection import is_hcu
-from sglang.srt.utils.common import async_h2d
+try:
+    from sglang.srt.utils.common import async_h2d
+except ImportError:
+    from sglang.srt.utils.device import async_h2d
 from sglang.srt.utils.network import NetworkAddress
 from sglang.srt.utils.torch_memory_saver_adapter import TorchMemorySaverAdapter
 from sglang.utils import is_in_ci

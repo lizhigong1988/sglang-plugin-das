@@ -16,7 +16,10 @@ import torch
 import triton
 import triton.language as tl
 
-from sglang.kernels.ops.attention.utils import seqlens_expand_triton
+try:
+    from sglang.kernels.ops.attention.utils import seqlens_expand_triton
+except ImportError:
+    from sglang.kernels.ops.attention.pad import seqlens_expand_triton
 from sglang.srt.layers.attention.dsa.utils import compute_dsa_seqlens
 from sglang.srt.utils import is_cuda, is_hip
 

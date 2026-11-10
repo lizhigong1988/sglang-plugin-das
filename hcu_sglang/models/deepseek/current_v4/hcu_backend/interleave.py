@@ -163,7 +163,10 @@ class InterleaveCPStrategy(ContextParallelStrategy):
 
     def shard_per_request(self, extend_seqs_cpu: List[int], extend_seqs: Any):
         """Build device outputs in the shared kernel to keep the split graph-safe."""
-        from sglang.kernels.ops.attention.dsa.cp_split import dsa_cp_interleave_q_seqs_kernel
+        try:
+            from sglang.kernels.ops.attention.dsa.cp_split import dsa_cp_interleave_q_seqs_kernel
+        except ImportError:
+            from sglang.kernels.ops.attention.dsa.cp_split import _dsa_cp_interleave_q_seqs_kernel as dsa_cp_interleave_q_seqs_kernel
         cp_size = self.cp_size
         cp_rank = self.cp_rank
         extra_seq = 0

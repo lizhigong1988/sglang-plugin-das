@@ -8,7 +8,10 @@ from typing import TYPE_CHECKING
 
 import torch
 
-from sglang.kernels.ops.attention.dsa import index_buf_accessor
+try:
+    from sglang.kernels.ops.attention.dsa import index_buf_accessor
+except ImportError:
+    from hcu_sglang.layers.attention.glm5_next import index_buf_accessor
 from sglang.srt.constants import GPU_MEMORY_TYPE_KV_CACHE
 
 if TYPE_CHECKING:

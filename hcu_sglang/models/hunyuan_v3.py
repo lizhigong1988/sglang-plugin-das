@@ -59,13 +59,31 @@ from sglang.srt.layers.vocab_parallel_embedding import (
     ParallelLMHead,
     VocabParallelEmbedding,
 )
-from sglang.srt.managers.schedule_batch import ForwardBatch
+try:
+    from sglang.srt.managers.schedule_batch import ForwardBatch
+except ImportError:
+    from sglang.srt.model_executor.forward_batch_info import ForwardBatch
 from sglang.srt.model_executor.forward_context import get_attn_backend, get_token_to_kv_pool
 from sglang.srt.model_executor.forward_batch_info import PPProxyTensors
 from sglang.srt.model_executor.runner import get_is_capture_mode
 from sglang.srt.model_loader.weight_utils import default_weight_loader
 from sglang.srt.runtime_context import get_exec, get_model, get_parallel, get_stream
-from sglang.srt.utils import get_bool_env_var, is_cuda, is_hip, make_layers
+try:
+    from sglang.srt.utils import get_bool_env_var
+except ImportError:
+    from sglang.srt.utils.common import get_bool_env_var
+try:
+    from sglang.srt.utils import is_cuda
+except ImportError:
+    from sglang.srt.utils.device import is_cuda
+try:
+    from sglang.srt.utils import is_hip
+except ImportError:
+    from sglang.srt.utils.device import is_hip
+try:
+    from sglang.srt.utils import make_layers
+except ImportError:
+    from sglang.srt.layers.utils.layer_list import make_layers
 from sglang.srt.utils.common import LazyValue
 from sglang.srt.utils.hf_transformers_utils import get_rope_config
 

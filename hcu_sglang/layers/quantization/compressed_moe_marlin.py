@@ -9,7 +9,10 @@ from sglang.srt.layers.moe import MoeRunnerConfig
 from sglang.srt.layers.moe.utils import get_moe_a2a_backend
 from hcu_sglang.layers.moe.deepep_fp8 import get_deepgemm_marlin_weight_pack_fn
 from sglang.srt.layers.quantization.base_config import FusedMoEMethodBase
-from sglang.srt.utils import set_weight_attrs
+try:
+    from sglang.srt.layers.utils.common import set_weight_attrs
+except ImportError:
+    from sglang.srt.utils import set_weight_attrs
 from hcu_sglang.layers.quantization.lightop_int8_marlin import get_w8a8_int8_marlin_weights
 
 logger = logging.getLogger(__name__)

@@ -40,7 +40,10 @@ from typing import TYPE_CHECKING, Any, Optional
 
 import torch
 
-from sglang.kernels.ops.attention.dsa import index_buf_accessor
+try:
+    from sglang.kernels.ops.attention.dsa import index_buf_accessor
+except ImportError:
+    from hcu_sglang.layers.attention.glm5_next import index_buf_accessor
 from hcu_sglang.mem_cache.dsa_index_cache_mode import (
     IndexKCacheMode,
     quantize_and_store_index_k_int8,

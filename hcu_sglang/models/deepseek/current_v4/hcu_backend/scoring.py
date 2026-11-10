@@ -11,7 +11,10 @@ from sglang.kernels.ops.attention.dsv4.fp4_indexer_rope import index_q_rope_pack
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.index_logits import flat_index_logits_tiles
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.topk import plan_topk_v2, topk_transform_paged_v2
 from sglang.srt.runtime_context import get_platform
-from sglang.srt.utils.common import async_h2d
+try:
+    from sglang.srt.utils.common import async_h2d
+except ImportError:
+    from sglang.srt.utils.device import async_h2d
 from sglang.srt.layers.attention.dsv4.v41_indexer.types import DecodeInputs, PrefillInputs
 if TYPE_CHECKING:
     from hcu_sglang.models.deepseek.current_v4.hcu_backend.dsv41_sparse import DeepseekV41Indexer

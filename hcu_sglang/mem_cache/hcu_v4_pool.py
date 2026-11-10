@@ -29,16 +29,36 @@ from typing import (
 
 import torch
 
-from sglang.kernels.ops.attention.dsa import index_buf_accessor
-from sglang.kernels.ops.attention.dsv4 import (
-    clear_unaccepted_c128_draft_states,
-    fused_k_norm_rope_flashmla,
-    fused_store_cache,
-)
-from sglang.kernels.ops.attention.dsv4 import (
-    index_buf_accessor as dsv4_index_buf_accessor,
-)
-from sglang.kernels.ops.attention.dsv4.index_buf_accessor import NopeFp8RopeBf16Pack
+try:
+    from sglang.kernels.ops.attention.dsa import index_buf_accessor
+except ImportError:
+    from hcu_sglang.layers.attention.glm5_next import index_buf_accessor
+try:
+    from sglang.kernels.ops.attention.dsv4 import (
+        clear_unaccepted_c128_draft_states,
+        fused_k_norm_rope_flashmla,
+        fused_store_cache,
+    )
+except ImportError:
+    from sglang.kernels.ops.kvcache.dsv4_c128_cleanup import (
+        clear_unaccepted_c128_draft_states,
+    )
+    from sglang.kernels.ops.attention.dsv4 import (
+        fused_k_norm_rope_flashmla,
+        fused_store_cache,
+    )
+try:
+    from sglang.kernels.ops.attention.dsv4 import (
+        index_buf_accessor as dsv4_index_buf_accessor,
+    )
+except ImportError:
+    from hcu_sglang.layers.attention.glm5_next import (
+        index_buf_accessor as dsv4_index_buf_accessor,
+    )
+try:
+    from sglang.kernels.ops.attention.dsv4.index_buf_accessor import NopeFp8RopeBf16Pack
+except ImportError:
+    from sglang.kernels.ops.kvcache.dsv4_main_kv_store import NopeFp8RopeBf16Pack
 from sglang.kernels.ops.attention.dsv4.kv_layout import (
     KVLayout,
     is_valid_kv_layout_pair,
@@ -70,7 +90,10 @@ from sglang.srt.model_executor.cuda_graph_config import Backend
 from sglang.srt.runtime_context import get_exec, get_platform, get_spec
 from sglang.srt.utils import ceil_div, is_gfx95_supported, is_hip
 from hcu_sglang.utils.detection import is_hcu as is_hcu
-from sglang.srt.utils.common import get_cuda_graph_max_batch_size
+try:
+    from sglang.srt.utils.common import get_cuda_graph_max_batch_size
+except ImportError:
+    from sglang.srt.layers.dp_attention import get_cuda_graph_max_batch_size
 
 logger = logging.getLogger(__name__)
 

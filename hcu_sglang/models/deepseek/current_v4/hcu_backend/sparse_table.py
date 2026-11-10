@@ -11,7 +11,10 @@ from hcu_sglang.models.deepseek.current_v4.hcu_backend.index_logits import deep_
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.topk import topk_transform_paged_v2, topk_transform_ragged_v2, topk_transform_sparse
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.indexer import topk_transform_paged_bf16, topk_transform_paged_from_metadata
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.metadata import expand_index_page_table
-from sglang.srt.utils.common import async_h2d
+try:
+    from sglang.srt.utils.common import async_h2d
+except ImportError:
+    from sglang.srt.utils.device import async_h2d
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.scoring import DeepGEMMDecodeData, DeepGEMMPrefillData, get_deep_gemm_decode_data, get_deep_gemm_prefill_data, get_index_k_cache, quantize_index_q, score_tiles, topk_ragged
 from sglang.srt.layers.attention.dsv4.v41_indexer.types import CandidateMetadata, CapturedPrefillInputs, DecodeInputs, PrefillInputs, get_tail_row_indices
 if TYPE_CHECKING:

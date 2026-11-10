@@ -7,9 +7,14 @@ import torch
 import triton
 import triton.language as tl
 
-from sglang.kernels.ops.attention.dsa.dequant_k_cache import (
-    dequantize_k_cache_paged as _generic_dequantize_k_cache_paged,
-)
+try:
+    from sglang.kernels.ops.attention.dsa.dequant_k_cache import (
+        dequantize_k_cache_paged as _generic_dequantize_k_cache_paged,
+    )
+except ImportError:
+    from sglang.kernels.ops.attention.dsa.dequant_k_cache import (
+        dequantize_k_cache_paged_dsa as _generic_dequantize_k_cache_paged,
+    )
 
 
 _DEQUANT_PAGED_BLOCK_T = int(os.getenv("SGLANG_DEQUANT_K_CACHE_BLOCK_T", "16"))

@@ -40,7 +40,10 @@ import triton
 from hcu_sglang.models.deepseek.current_v4.hcu_backend.dequant_k_cache import DIM_NOPE, DIM_ROPE
 from sglang.srt.utils import ceil_align, get_bool_env_var
 from hcu_sglang.utils.detection import is_hcu as is_hcu
-from sglang.srt.utils.common import async_h2d
+try:
+    from sglang.srt.utils.common import async_h2d
+except ImportError:
+    from sglang.srt.utils.device import async_h2d
 _use_hcu_combine_topk_swa_indices = is_hcu() and get_bool_env_var('SGLANG_HCU_OPT_COMBINE_TOPK_SWA_INDICES', 'true')
 _hcu_combine_topk_swa_indices = None
 if _use_hcu_combine_topk_swa_indices:

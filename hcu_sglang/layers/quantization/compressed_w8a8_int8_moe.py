@@ -17,7 +17,14 @@ from hcu_sglang.layers.moe.backend_selection import will_use_aiter_moe
 from sglang.srt.layers.quantization.compressed_tensors.schemes import (
     CompressedTensorsMoEScheme,
 )
-from sglang.srt.utils import get_bool_env_var, set_weight_attrs
+try:
+    from sglang.srt.utils import get_bool_env_var
+except ImportError:
+    from sglang.srt.utils.common import get_bool_env_var
+try:
+    from sglang.srt.layers.utils.common import set_weight_attrs
+except ImportError:
+    from sglang.srt.utils import set_weight_attrs
 
 from hcu_sglang.utils.detection import is_hcu
 

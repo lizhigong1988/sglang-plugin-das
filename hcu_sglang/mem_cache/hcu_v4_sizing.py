@@ -10,7 +10,15 @@ from sglang.srt.model_executor.pool_configurator import (
 from sglang.srt.runtime_context import (get_disagg, get_exec, get_memory,
     get_parallel, get_schedule, get_spec, max_speculative_num_draft_tokens)
 from sglang.srt.environ import envs
-from sglang.srt.utils.common import ceil_align, ceil_div, is_hip, is_npu
+from sglang.srt.utils.common import ceil_align, ceil_div
+try:
+    from sglang.srt.utils.common import is_hip
+except ImportError:
+    from sglang.srt.utils.device import is_hip
+try:
+    from sglang.srt.utils.common import is_npu
+except ImportError:
+    from sglang.srt.utils.device import is_npu
 from hcu_sglang.config import cp_cache_layer_split_enabled
 from hcu_sglang.mem_cache.hcu_v4_pool import (
     collect_sources_by_ratio, get_compress_state_write_pad,

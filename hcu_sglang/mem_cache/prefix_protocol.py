@@ -94,7 +94,10 @@ class _BaseMethods:
         self, req: Req, pre_len: int, *, eviction_interval: int = 1
     ) -> None:
         """Slide request-owned windows at the scheduler's safe eviction frontier."""
-        from sglang.srt.mem_cache.common import free_swa_out_of_window_slots
+        try:
+            from sglang.srt.mem_cache.common import free_swa_out_of_window_slots
+        except ImportError:
+            from hcu_sglang.mem_cache.common import free_swa_out_of_window_slots
 
         free_swa_out_of_window_slots(
             req,

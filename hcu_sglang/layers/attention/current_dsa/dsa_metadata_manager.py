@@ -9,11 +9,18 @@ import logging
 from functools import partial
 from typing import TYPE_CHECKING
 
-from sglang.kernels.ops.attention.dsa_metadata import (
-    fused_dsa_decode_metadata,
-    fused_dsa_draft_extend_metadata,
-    fused_dsa_target_verify_metadata,
-)
+try:
+    from sglang.kernels.ops.attention.dsa_metadata import (
+        fused_dsa_decode_metadata,
+        fused_dsa_draft_extend_metadata,
+        fused_dsa_target_verify_metadata,
+    )
+except ImportError:
+    from sglang.kernels.ops.attention.dsa.metadata import (
+        fused_dsa_decode_metadata,
+        fused_dsa_draft_extend_metadata,
+        fused_dsa_target_verify_metadata,
+    )
 from sglang.srt.environ import envs
 from hcu_sglang.layers.attention.current_dsa.flashmla_backend import (
     can_fuse_flashmla_metadata,

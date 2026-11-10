@@ -643,7 +643,10 @@ def register_hooks():
         return
     from sglang.srt.plugins.hook_registry import HookRegistry, HookType
     _NATIVE.suffix_page_indices = suffix_page_indices
-    HookRegistry.register("sglang.srt.mem_cache.common.free_swa_out_of_window_slots", free_swa_out_of_window_slots, HookType.REPLACE)
+    import sglang.srt.mem_cache.common as _up_common
+    if hasattr(_up_common, "free_swa_out_of_window_slots"):
+        # pinned upstream (1be97a0) lacks this target; plugin ships its own copy
+        HookRegistry.register("sglang.srt.mem_cache.common.free_swa_out_of_window_slots", free_swa_out_of_window_slots, HookType.REPLACE)
     HookRegistry.register("sglang.srt.mem_cache.common._req_radix_key", _req_radix_key, HookType.REPLACE)
     HookRegistry.register("sglang.srt.mem_cache.common.match_kv_cache", match_kv_cache, HookType.REPLACE)
     HookRegistry.register("sglang.srt.mem_cache.common.checkpoint_kv_cache", checkpoint_kv_cache, HookType.REPLACE)

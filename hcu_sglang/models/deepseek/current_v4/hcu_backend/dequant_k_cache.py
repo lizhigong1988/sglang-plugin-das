@@ -4,7 +4,12 @@ from typing import Optional, Union
 import torch
 import triton
 import triton.language as tl
-from sglang.kernels.jit.utils import get_jit_cuda_arch, is_hip_runtime
+try:
+    from sglang.kernels.jit.utils import get_jit_cuda_arch, is_hip_runtime
+except ImportError:
+    # 1be97a0: get_jit_cuda_arch() became get_compile_arch() (CompileArch.major kept)
+    from sglang.kernels.jit.utils.common import is_hip_runtime
+    from sglang.kernels.jit.utils.arch import get_compile_arch as get_jit_cuda_arch
 from sglang.kernels.ops.attention.dsv4.kv_layout import KVLayout
 from sglang.kernels.ops.quantization.fp8_kernel import is_fp8_fnuz
 from sglang.srt.utils import is_gfx95_supported

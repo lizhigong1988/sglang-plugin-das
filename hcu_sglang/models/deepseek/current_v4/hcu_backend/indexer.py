@@ -25,9 +25,31 @@ from sglang.srt.model_executor.runner_backend_utils.tc_piecewise_cuda_graph impo
 from sglang.srt.model_executor.runner import get_is_capture_mode
 from sglang.srt.runtime_context import get_disagg, get_schedule, get_exec, get_parallel, get_platform
 from sglang.srt.state_capturer.indexer_topk import get_global_indexer_capturer
-from sglang.srt.utils import add_prefix, is_cuda, is_gfx95_supported, is_hip, is_xpu
+try:
+    from sglang.srt.utils import add_prefix
+except ImportError:
+    from sglang.srt.layers.utils.common import add_prefix
+try:
+    from sglang.srt.utils import is_cuda
+except ImportError:
+    from sglang.srt.utils.device import is_cuda
+try:
+    from sglang.srt.utils import is_gfx95_supported
+except ImportError:
+    from sglang.srt.utils.device import is_gfx95_supported
+try:
+    from sglang.srt.utils import is_hip
+except ImportError:
+    from sglang.srt.utils.device import is_hip
+try:
+    from sglang.srt.utils import is_xpu
+except ImportError:
+    from sglang.srt.utils.device import is_xpu
 from hcu_sglang.utils.detection import is_hcu as is_hcu
-from sglang.srt.utils.common import is_gfx942_supported
+try:
+    from sglang.srt.utils.common import is_gfx942_supported
+except ImportError:
+    from sglang.srt.utils.device import is_gfx942_supported
 if TYPE_CHECKING:
     from sglang.srt.layers.attention.base_attn_backend import AttentionBackend
     from hcu_sglang.models.deepseek.current_v4.hcu_backend.compressor_v2 import CompressorBackendMixin

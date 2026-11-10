@@ -40,9 +40,7 @@ from sglang.srt.layers.attention.dsa_backend import (
     _is_hip,
     _is_xpu,
     _resolve_dsa_triton_union,
-    _restore_trtllm_decode_dp_padding,
     _to_2d_context_lens,
-    _trim_trtllm_decode_dp_padding,
     _validate_flashmla_sparse_q8_backend,
     _validate_triton_sparse_mla_backend,
     compute_cu_seqlens,
@@ -52,12 +50,10 @@ from sglang.srt.layers.attention.dsa_backend import (
     concat_mla_absorb_q_general,
     dataclass,
     dcp_trtllm_sparse_attention,
-    dequantize_k_cache_paged,
     dsa_use_prefill_cp,
     envs,
     flash_attn_varlen_func,
     gather_cast_kv_fp8_pad_paged,
-    gather_dequant_requant_fp8_paged,
     get_buffer,
     get_cp_strategy,
     get_dsa_index_kpool,
@@ -65,7 +61,6 @@ from sglang.srt.layers.attention.dsa_backend import (
     get_exec,
     get_parallel,
     get_platform,
-    get_schedule,
     get_spec,
     grow_multi_ctas_kv_counter_buffer_if_needed,
     is_cp_active,
@@ -90,6 +85,67 @@ from sglang.srt.layers.attention.dsa_backend import (
     transform_index_page_table_decode,
     transform_index_page_table_prefill,
 )
+
+try:
+    from sglang.srt.layers.attention.dsa_backend import get_schedule
+except ImportError:
+    from sglang.srt.runtime_context import get_schedule
+try:
+    from sglang.srt.layers.attention.dsa_backend import (
+        dequantize_k_cache_paged,
+        gather_dequant_requant_fp8_paged,
+    )
+except ImportError:
+    from hcu_sglang.layers.attention.current_dsa.dequant_k_cache import (
+        dequantize_k_cache_paged,
+    )
+    from sglang.kernels.ops.attention.dsa.dequant_k_cache import (
+        gather_dequant_requant_fp8_paged_dsa as gather_dequant_requant_fp8_paged,
+    )
+try:
+    from sglang.srt.layers.attention.dsa_backend import _trim_trtllm_decode_dp_padding
+except ImportError:
+    # ported verbatim from sglang v0.5.22 (sglang/srt/layers/attention/dsa_backend.py)
+    def _trim_trtllm_decode_dp_padding(
+        q_all: torch.Tensor,
+        topk_indices: Optional[torch.Tensor],
+        real_batch_size: int,
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], int]:
+        """Align eager decode inputs with metadata planned before DP padding."""
+        physical_batch_size = q_all.shape[0]
+        assert real_batch_size <= physical_batch_size, (
+            f"DSA metadata batch size ({real_batch_size}) exceeds q batch size "
+            f"({physical_batch_size})"
+        )
+        if topk_indices is not None:
+            assert real_batch_size <= topk_indices.shape[0], (
+                f"DSA metadata batch size ({real_batch_size}) exceeds topk batch size "
+                f"({topk_indices.shape[0]})"
+            )
+
+        num_padding_rows = physical_batch_size - real_batch_size
+        if num_padding_rows == 0:
+            return q_all, topk_indices, 0
+
+        return (
+            q_all[:real_batch_size],
+            topk_indices[:real_batch_size] if topk_indices is not None else None,
+            num_padding_rows,
+        )
+try:
+    from sglang.srt.layers.attention.dsa_backend import _restore_trtllm_decode_dp_padding
+except ImportError:
+    # ported verbatim from sglang v0.5.22 (sglang/srt/layers/attention/dsa_backend.py)
+    def _restore_trtllm_decode_dp_padding(
+        output: torch.Tensor, num_padding_rows: int
+    ) -> torch.Tensor:
+        """Restore the physical DP shape required by downstream MLP collectives."""
+        if num_padding_rows == 0:
+            return output
+        return torch.cat(
+            [output, output.new_zeros((num_padding_rows, *output.shape[1:]))],
+            dim=0,
+        )
 from sglang.kernels.ops.attention.dsa.triton_kernel import get_valid_kv_indices
 from sglang.kernels.ops.quantization.fp8_kernel import fp8_dtype
 from hcu_sglang.layers.attention.current_dsa.dsa_topk_backend import DSATopKBackend, TopkTransformMethod

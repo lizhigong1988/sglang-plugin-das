@@ -118,8 +118,13 @@ def install_quantization_method() -> bool:
 
     model_config = sys.modules.get("sglang.srt.configs.model_config")
     if model_config is not None:
-        for name, config in methods.items():
-            model_config.QUANTIZATION_METHODS.setdefault(name, config)
+        # 1be97a0 dropped model_config.QUANTIZATION_METHODS (its
+        # REQUANTIZATION_METHODS is a plain name list, not a config dict);
+        # registration lives in layers.quantization's dicts above.
+        methods_dict = getattr(model_config, "QUANTIZATION_METHODS", None)
+        if methods_dict is not None:
+            for name, config in methods.items():
+                methods_dict.setdefault(name, config)
     return True
 
 

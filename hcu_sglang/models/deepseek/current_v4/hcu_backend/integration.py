@@ -1,4 +1,5 @@
 """Fixed-0.5.22 HCU backend graph registered through formal function/class seams."""
+import os
 from importlib import import_module
 from sglang.srt.plugins.hook_registry import HookRegistry,HookType
 
@@ -616,4 +617,34 @@ def register_hooks():
     for name in ('c1_decode_norm_rope_store','c2_decode_norm_rope_store','c2_prefill_norm_rope_store'):
         HookRegistry.register('sglang.kernels.ops.attention.dsv4.low_ratio_compress.'+name,
             getattr(low_ratio,name),HookType.REPLACE)
+    # Smoke diagnostics (HCU_DBG_GRAPH_KEYS=1): print every decode-graph
+    # capture/replay shape key to chase variant-key mismatches.
+    if os.getenv('HCU_DBG_GRAPH_KEYS', '0') == '1':
+        def _dbg_capture(original, *args, **kwargs):
+            self = args[0] if args else None
+            key = args[1] if len(args) > 1 else kwargs.get('shape_key')
+            print(f'[dbg-graph] capture id={id(self)} key={key}', flush=True)
+            return original(*args, **kwargs)
+
+        def _dbg_replay(original, *args, **kwargs):
+            self = args[0] if args else None
+            key = args[1] if len(args) > 1 else kwargs.get('shape_key')
+            print(f'[dbg-graph] replay id={id(self)} key={key}', flush=True)
+            try:
+                return original(*args, **kwargs)
+            except KeyError:
+                have = sorted(
+                    getattr(self, '_graphs', {}),
+                    key=lambda k: (k.size, str(k.attention_variant)),
+                )
+                print(
+                    f'[dbg-graph] MISSING id={id(self)} key={key}; '
+                    f'have={len(have)}: {have[:40]}',
+                    flush=True,
+                )
+                raise
+
+        _b = 'sglang.srt.model_executor.runner_backend.full_cuda_graph_backend.FullCudaGraphBackend'
+        HookRegistry.register(f'{_b}.capture_one', _dbg_capture, HookType.AROUND)
+        HookRegistry.register(f'{_b}.replay', _dbg_replay, HookType.AROUND)
     return len(_FORMAL)+5

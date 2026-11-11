@@ -62,7 +62,7 @@ def validate_cp_cache_layer_split(args, hf_config):
             bool(getattr(text_config, "dspark_target_layer_ids", None)),
             "requires a DSPARK model configuration",
         )
-    from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
+    from hcu_sglang.utils.env_gate_compat import (
         is_unified_kv_triton,
     )
 

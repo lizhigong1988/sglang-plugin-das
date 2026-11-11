@@ -993,9 +993,16 @@ class PrefillCudaGraphRunner(_NATIVE[0]):
             ),
             max_seq_len_override=self.max_context_size,
         )
-        forward_batch.kv_loc_plan.bind_replay(
+        _plan = getattr(forward_batch, "kv_loc_plan", None)
+        if _plan is None:
+            # 1be97a0 renamed KVLocPlan -> IterationIds.
+            _plan = forward_batch.iteration_ids
+        _translator = getattr(self.model_runner, "kv_index_translator", None)
+        if _translator is None:
+            _translator = self.model_runner.runner_ids
+        _plan.bind_replay(
             static_forward_batch,
-            self.model_runner.kv_index_translator,
+            _translator,
             slots=out_cache_loc,
         )
         # The n-gram hasher runs outside the graph and reads this at replay.

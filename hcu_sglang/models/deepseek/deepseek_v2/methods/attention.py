@@ -149,6 +149,14 @@ def __init__(
 
         if not self.skip_topk or is_nextn:
             is_neox_style = not getattr(config, "indexer_rope_interleave", False)
+            # 1be97a0: deepseek_v2 no longer re-exports Indexer; the class lives
+            # in layers.attention.dsa.dsa_indexer.
+            if not hasattr(N0, "Indexer"):
+                from sglang.srt.layers.attention.dsa.dsa_indexer import (
+                    Indexer as _DsaIndexer,
+                )
+
+                N0.Indexer = _DsaIndexer
             indexer_cls = (
                 N0.IndexerKPool if N0.get_dsa_index_kpool(config) > 1 else N0.Indexer
             )
@@ -1091,7 +1099,9 @@ def _get_mla_kv_buffer_from_fp8_for_dsa(
         # backend the EAGLE draft model runs on keeps that default. With no
         # translator the ids never went VIRTUAL, so there is nothing to
         # collapse.
-        translator = N2.get_attn_backend().kv_index_translator
+        # 1be97a0 dropped the backend-level kv_index_translator default
+        # (runner_ids on the base class now); absent means "no translate".
+        translator = getattr(N2.get_attn_backend(), "kv_index_translator", None)
         if translator is not None:
             kv_indices = translator.translate_dcp_read_ids(kv_indices)
         kv_a, k_pe = N2.get_token_to_kv_pool().get_mla_kv_buffer(

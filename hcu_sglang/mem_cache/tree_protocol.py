@@ -24,6 +24,19 @@ class _TreeMethods:
         ) = self._match_prefix_helper(
             key, return_full_match=params.return_full_match
         )
+        _post_kwargs = {}
+        # 1be97a0 added last_visited_node_id + device_validators; the plugin
+        # walker keeps no last-node id, so report root-only (None) and mirror
+        # the native device-validator construction.
+        import inspect as _inspect
+
+        if "last_visited_node_id" in _inspect.signature(
+            self._match_post_processor
+        ).parameters:
+            _post_kwargs["last_visited_node_id"] = None
+            _post_kwargs["device_validators"] = self._create_match_validators(
+                params, match_device_only=True
+            )
         return self._match_post_processor(
             params,
             value,
@@ -32,6 +45,7 @@ class _TreeMethods:
             best_match_device_value_len,
             full_kv_hit_length,
             action,
+            **_post_kwargs,
         )
 
     def _match_prefix_helper(

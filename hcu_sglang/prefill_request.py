@@ -271,6 +271,10 @@ class Req(N.Req):
         # no rebind.
         self.kv_rotation_base: N.Optional[int] = None
 
+        # 1be97a0: launched steps whose results are not processed yet,
+        # read by ScheduleBatch.add_inflight_step / step accounting.
+        self.inflight_steps = 0
+
         # Whether or not if it is chunked. It increments whenever
         # it is chunked, and decrement whenever chunked request is
         # processed.
@@ -282,6 +286,22 @@ class Req(N.Req):
         self.retracted_stain = False
 
         self.weight_version_events: N.List[N.WeightVersionEvent] = []
+
+        # 1be97a0-only Req fields (the fork's __init__ predates them; the
+        # native readers below crash on absence — e.g. the output streamer's
+        # detokenize header handshake).
+        self._think_start_match_len = 0
+        self.page_guard_state = None
+        self.uocr_doc = None
+        self._user_cache_salt = getattr(self, "cache_salt", None)
+        self.exit_via = None
+        self.send_via = None
+        self.defer_output = False
+        self.matched_window_host_hit_lengths = {}
+        self.prefill_weight_versions = None
+        self.detokenize_header_sent = False
+        self.request_stats_retraction_count = None
+        self.linker_offload_skip_prefix_len = 0
 
         # Incremental streamining
         self.send_token_offset: int = 0

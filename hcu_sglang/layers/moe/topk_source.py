@@ -456,6 +456,10 @@ if _use_lightop_moe_gate_pad_int64_fusion:
 
 
 TopKConfig = N.TopKConfig
+try:
+    from sglang.srt.configs.shared_experts import SharedExpertsConfig  # 1be97a0+
+except ImportError:
+    SharedExpertsConfig = None  # type: ignore[assignment]
 
 
 # -------------------------------- TopKOutput ---------------------------------------
@@ -712,13 +716,27 @@ class TopK(N.TopK):
         # Under the flashinfer_mxfp4 backend, fp4-expert ckpts take STANDARD
         # (consumes topk_ids/weights); otherwise BYPASSED. No-op on other backends.
         self.is_fp4_experts = is_fp4_experts
+        # 1be97a0 folded num_fused_shared_experts into SharedExpertsConfig and
+        # dropped the flat field; pass whichever shape this pin accepts and keep
+        # the legacy attribute readable for the plugin's own helpers below.
+        from dataclasses import fields as _dc_fields
+
+        _cfg_fields = {f.name for f in _dc_fields(TopKConfig)}
+        _shared_kwargs = (
+            {"num_fused_shared_experts": num_fused_shared_experts}
+            if "num_fused_shared_experts" in _cfg_fields
+            else {
+                "shared_experts": SharedExpertsConfig(
+                    num_fused_shared_experts=num_fused_shared_experts
+                )
+            }
+        )
         self.topk_config = TopKConfig(
             top_k=top_k,
             use_grouped_topk=use_grouped_topk,
             renormalize=renormalize,
             topk_group=topk_group,
             num_expert_group=num_expert_group,
-            num_fused_shared_experts=num_fused_shared_experts,
             custom_routing_function=custom_routing_function,
             correction_bias=correction_bias,
             routed_scaling_factor=routed_scaling_factor,
@@ -729,7 +747,14 @@ class TopK(N.TopK):
             sqrtsoftplus_log1p=sqrtsoftplus_log1p,
             fused_gate_packed_ids=fused_gate_packed_ids,
             allow_routed_experts_capture=allow_routed_experts_capture,
+            **_shared_kwargs,
         )
+        if not hasattr(self.topk_config, "num_fused_shared_experts"):
+            self.topk_config.num_fused_shared_experts = num_fused_shared_experts
+        if not hasattr(self, "_runner_backend_bound"):
+            # this __init__ intentionally bypasses N.TopK.__init__; 1be97a0's
+            # bind_runner_backend() expects this flag to exist
+            self._runner_backend_bound = False
 
     def _apply_waterfill(self, topk_output: TopKOutput, num_tokens: int) -> TopKOutput:
         if self.enable_waterfill and self.waterfill_balancer is None:

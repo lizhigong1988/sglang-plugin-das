@@ -342,6 +342,84 @@ def _install_compat_members() -> None:
     for name in ('_initialize_int8_index_k_workspace', '_create_index_k_buffer', '_get_indexer_cache_index', '_clear_index_k_buffers', 'get_index_k_with_scale_write_buffer', 'get_index_k_buffer', 'dequantize_index_k_int8_paged', 'set_index_k_int8_buffer', 'set_index_k_buffer', 'get_kv_layer_ids', 'get_state_layer_ids', 'get_index_k_cache_transfer_abi'):
         setattr(DSATokenToKVPool, name, getattr(P, name))
 
+    # 1be97a0: hybrid linear models wrap the DSA pool in HybridLinearKVPool,
+    # which upstream does not give the plugin's index-K members (mode flag,
+    # set/write accessors). The indexer reads them off the outer pool, so
+    # expose delegating pass-throughs onto the wrapper.
+    try:
+        from sglang.srt.mem_cache.memory_pool import HybridLinearKVPool
+    except ImportError:
+        HybridLinearKVPool = None
+    if HybridLinearKVPool is not None:
+        if "index_k_cache_mode" not in HybridLinearKVPool.__dict__:
+
+            @property
+            def _hcu_index_k_cache_mode(self):
+                return getattr(self.full_kv_pool, "index_k_cache_mode", None)
+
+            HybridLinearKVPool.index_k_cache_mode = _hcu_index_k_cache_mode
+
+        def _make_delegate(name):
+            def _delegate(self, *args, **kwargs):
+                # Model layer ids live in a different space than the wrapped
+                # full-attention pool's; mirror the native read delegation's
+                # wait + transfer before forwarding.
+                if "layer_id" in kwargs:
+                    self._wait_for_layer(kwargs["layer_id"])
+                    kwargs["layer_id"] = self._transfer_full_attention_id(
+                        kwargs["layer_id"]
+                    )
+                return getattr(self.full_kv_pool, name)(*args, **kwargs)
+
+            return _delegate
+
+        for name in (
+            "set_index_k_int8_buffer",
+            "set_index_k_buffer",
+            "get_index_k_buffer",
+            "dequantize_index_k_int8_paged",
+            "get_kv_layer_ids",
+            "get_state_layer_ids",
+            "invalidate_index_buffer_for_layer",
+            "_is_layer_owned",
+        ):
+            if name in HybridLinearKVPool.__dict__ or not hasattr(
+                DSATokenToKVPool, name
+            ):
+                continue
+            setattr(HybridLinearKVPool, name, _make_delegate(name))
+
+        if "get_index_k_with_scale_write_buffer" not in HybridLinearKVPool.__dict__:
+
+            def _write_buffer_delegate(self, layer_id):
+                self._wait_for_layer(layer_id)
+                layer_id = self._transfer_full_attention_id(layer_id)
+                return self.full_kv_pool.get_index_k_with_scale_write_buffer(
+                    layer_id=layer_id
+                )
+
+            HybridLinearKVPool.get_index_k_with_scale_write_buffer = (
+                _write_buffer_delegate
+            )
+
+        # fork-only contiguous index-K views (bf16/int8 gather); the indexer
+        # calls them with a positional layer_id, so mirror the native
+        # accessors' wait + transfer instead of the kwargs-only delegate.
+        def _make_layer_first_delegate(name):
+            def _delegate(self, layer_id, *args, **kwargs):
+                self._wait_for_layer(layer_id)
+                layer_id = self._transfer_full_attention_id(layer_id)
+                return getattr(self.full_kv_pool, name)(layer_id, *args, **kwargs)
+
+            return _delegate
+
+        for name in ("get_index_k_continuous", "get_index_k_scale_continuous"):
+            if name in HybridLinearKVPool.__dict__ or not hasattr(
+                DSATokenToKVPool, name
+            ):
+                continue
+            setattr(HybridLinearKVPool, name, _make_layer_first_delegate(name))
+
 
 def register_hooks() -> None:
     if not is_hcu():

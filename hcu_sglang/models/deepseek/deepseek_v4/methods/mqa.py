@@ -137,7 +137,7 @@ def _forward_prepare(
         use_cp = self.dsa_enable_prefill_cp and dsa_use_prefill_cp(forward_batch)
         kv: Optional[torch.Tensor]
 
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
+        from hcu_sglang.utils.env_gate_compat import (
             is_unified_kv_triton,
         )
 
@@ -387,7 +387,7 @@ def forward(
         # (no DSA-CP), pass `q` as a sentinel for the `k is v` assert; the
         # attention path doesn't read it once `save_kv_cache=False`.
         attn_k = kv if kv is not None else q
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
+        from hcu_sglang.utils.env_gate_compat import (
             is_unified_kv_triton,
         )
 

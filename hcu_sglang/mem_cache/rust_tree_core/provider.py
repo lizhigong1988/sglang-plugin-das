@@ -51,10 +51,37 @@ def around_load(original, python_module, **kwargs):
     return original(python_module, **kwargs)
 
 
+def _cargo_builds_edition2024() -> bool:
+    """The owned crate is edition 2024 (Rust >= 1.85); dtk-era images ship
+    cargo 1.75, which refuses the manifest outright."""
+    try:
+        out = subprocess.run(
+            ("cargo", "--version"),
+            cwd=_CRATE, check=True, capture_output=True, text=True, timeout=10,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+    head = out.strip().split(maxsplit=1)
+    if len(head) < 2:
+        return False
+    try:
+        major = int(head[1].split(".")[0])
+    except ValueError:
+        return False
+    return major >= 85
+
+
 def around_fallback_reason(original, params):
     reason = original(params)
     if not is_hcu() or reason is None:
         return reason
+    try:
+        from sglang.srt.environ import envs as _envs
+
+        if _envs.SGLANG_RUST_BUILD_MODE.get() == "never":
+            return reason  # explicit opt-out wins over the owned crate
+    except AttributeError:
+        pass
     availability = reason in (
         "the requested Rust TreeCore source build has no sources",
         "this installation contains neither the Rust TreeCore extension nor its sources",
@@ -70,6 +97,8 @@ def around_fallback_reason(original, params):
             subprocess.run(command, cwd=_CRATE, check=True, capture_output=True, text=True, timeout=10)
         except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
             return reason
+    if not _cargo_builds_edition2024():
+        return reason  # keep the Python TreeCore fallback on stale toolchains
     return None
 
 

@@ -32,11 +32,11 @@ def before_draft_alloc(self, *args, **kwargs):
         self.draft_runner.dsa_layer_split_scratch_source = target_pool
 
 
-def around_init_configurator(original, self):
+def around_init_configurator(original, self, *args, **kwargs):
     source = getattr(self, "dsa_layer_split_scratch_source", None)
     token = _scratch_source.set(source)
     try:
-        return original(self)
+        return original(self, *args, **kwargs)
     finally:
         _scratch_source.reset(token)
 

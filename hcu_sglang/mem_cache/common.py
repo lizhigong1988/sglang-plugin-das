@@ -301,6 +301,12 @@ def match_kv_cache(
             tree_cache, match_result, extra_key=req.extra_key
         )
     req.prefix_len = match_result.device_prefix_len
+    # 1be97a0 folded the SWA window's host hits into window_host_hit_lengths
+    # (keyed by ComponentType in the tree's raw MatchResult).
+    _swa_host_hits = getattr(match_result, "swa_host_hit_length", None)
+    if _swa_host_hits is None:
+        _window_hits = getattr(match_result, "window_host_hit_lengths", None) or {}
+        _swa_host_hits = _window_hits.get(ComponentType.SWA, 0)
     (
         req.last_node,
         req.last_host_node,
@@ -313,7 +319,7 @@ def match_kv_cache(
         match_result.last_host_node,
         match_result.best_match_node,
         match_result.host_hit_length,
-        match_result.swa_host_hit_length,
+        _swa_host_hits,
         match_result.mamba_host_hit_length,
     )
     max_len = req._compute_max_prefix_len(len(token_ids))

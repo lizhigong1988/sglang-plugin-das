@@ -18,6 +18,8 @@ consistent expert routing across the captured graph.
 
 from __future__ import annotations
 
+import inspect
+
 from typing import Callable, Optional
 
 from sglang.srt.layers.moe.token_dispatcher.deepep import DeepEPBuffer
@@ -60,10 +62,19 @@ def capture_one_shape(
     self,
     size: int,
     forward: Callable,
-    stream_idx: Optional[int] = None,
-    variant_label: Optional[str] = None,
-    attention_variant: Optional[str] = None,
+    a=None,
+    b=None,
+    c=None,
 ):
+    # The fork called this with a leading multi-stream index —
+    # (bs, forward, stream_idx, variant_label, attention_variant) — while
+    # 1be97a0 dropped the streams: (bs, forward, variant_label,
+    # attention_variant). stream_idx is always an int and the labels are
+    # str/None, so disambiguate positionally.
+    if isinstance(a, int):
+        stream_idx, variant_label, attention_variant = a, b, c
+    else:
+        stream_idx, variant_label, attention_variant = None, a, b
     num_tokens = size * self.captured_req_width
     bs = self._ragged_capture_slots(num_tokens) if self.ragged_verify_mode else size
 
@@ -73,8 +84,15 @@ def capture_one_shape(
             "Breakable CUDA graph is required for --debug-cuda-graph"
         )
 
+    # 1be97a0: upstream dropped the fork's multi-stream capture; pass
+    # stream_idx only when the bound native method still accepts it.
+    _prepare_kwargs = dict(num_tokens=num_tokens)
+    if stream_idx is not None and "stream_idx" in inspect.signature(
+        self.capture_prepare
+    ).parameters:
+        _prepare_kwargs["stream_idx"] = stream_idx
     forward_batch, attn_backend, pp_proxy_tensors = self.capture_prepare(
-        bs, stream_idx=stream_idx, num_tokens=num_tokens
+        bs, **_prepare_kwargs
     )
 
     # All setup hooks below read get_attn_backend() (TboForwardBatchPreparer,
@@ -152,9 +170,19 @@ def capture_one_shape(
         )
 
         with canary_ctx:
+            # 1be97a0: upstream _make_graph_key is (size, variant_label,
+            # attention_variant); keep stream_idx in the key only where the
+            # fork-style signature still accepts it.
+            _key_extra = (
+                [stream_idx]
+                if stream_idx is not None
+                and "stream_idx"
+                in inspect.signature(self._make_graph_key).parameters
+                else []
+            )
             shape_key = self._make_graph_key(
                 self._capture_graph_size(bs=bs, num_tokens=num_tokens),
-                stream_idx,
+                *_key_extra,
                 variant_label,
                 attention_variant,
             )

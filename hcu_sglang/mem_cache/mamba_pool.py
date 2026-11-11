@@ -37,6 +37,8 @@ def __init__(
     linear_replayssm_cache_len: int = 16,
     envelope_layout: bool = False,
     enable_linear_replayssm_spec: bool = False,
+    replayssm_request_ring: Optional[object] = None,  # 1be97a0; unused while replayssm is off
+    **_upstream_extra,  # tolerate kwargs added by newer upstream pins
 ):
     conv_state_shape = cache_params.shape.conv
     temporal_state_shape = cache_params.shape.temporal
@@ -52,6 +54,11 @@ def __init__(
     self.device = device
     self.debug_memory_pool = envs.SGLANG_DEBUG_MEMORY_POOL.get()
     self.enable_linear_replayssm = enable_linear_replayssm
+    # 1be97a0: native hybrid backend's _replayssm_request_ring() reads this
+    # attribute on the state pool; mirror the upstream default when absent.
+    self.replayssm_request_ring = bool(
+        replayssm_request_ring if replayssm_request_ring is not None else False
+    )
     self.linear_replayssm_cache_len = linear_replayssm_cache_len
     # ReplaySSM: the decode ring (--enable-linear-replayssm) allocates the
     # chunked (d, k) records + write_pos; the spec-verify flag

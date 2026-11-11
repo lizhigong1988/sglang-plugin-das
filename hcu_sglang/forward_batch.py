@@ -342,7 +342,12 @@ class ForwardBatchMethods:
             device,
         )
 
-        translator = model_runner.kv_index_translator
+        translator = getattr(model_runner, "kv_index_translator", None)
+        if translator is None:
+            # 1be97a0 renamed kv_index_translator -> runner_ids
+            # (KVLocPlan -> IterationIds); own_plan/bind/bind_replay
+            # keep their names, so only the lookup site adapts.
+            translator = model_runner.runner_ids
         if kv_loc_plan is None:
             kv_loc_plan = translator.own_plan(ret)
         kv_loc_plan.bind(ret, translator, cols=write_cols)

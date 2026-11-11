@@ -106,6 +106,25 @@ from lightop import attention as lightop_attention, kvcache as lightop_kvcache
 from hcu_sglang.layers.attention.current_dsa.mqa_logits_utils import mqa_logits_free_mem_bytes, mqa_logits_budget_bytes, mqa_logits_free_mem_fraction, mqa_logits_should_chunk, mqa_logits_static_budget_bytes
 
 
+def _index_k_write_buffer(pool, layer_id):
+    """1be97a0: upstream's HybridLinearKVPool composes the DSA pool and only
+    delegates the read-buffer accessor; reach the write buffer through the
+    full_kv_pool the same way its own delegation does."""
+    fn = getattr(pool, "get_index_k_with_scale_write_buffer", None)
+    if fn is not None:
+        return fn(layer_id=layer_id)
+    inner = getattr(pool, "full_kv_pool", None)
+    if inner is not None and hasattr(inner, "get_index_k_with_scale_write_buffer"):
+        _wait = getattr(pool, "_wait_for_layer", None)
+        if _wait is not None:
+            _wait(layer_id)
+        _transfer = getattr(pool, "_transfer_full_attention_id", None)
+        if _transfer is not None:
+            layer_id = _transfer(layer_id)
+        return inner.get_index_k_with_scale_write_buffer(layer_id=layer_id)
+    return pool.get_index_k_with_scale_buffer(layer_id=layer_id)
+
+
 def _hcu_paged_mqa_logits(
     q: torch.Tensor,
     kv_cache: torch.Tensor,
@@ -523,7 +542,7 @@ class Indexer(DSANPUIndexerMixin, BaseFusedOp):
         result = lightop_kvcache.fuse_qk_quant_and_store_index_k_cache(
             query,
             key,
-            pool.get_index_k_with_scale_write_buffer(layer_id=layer_id),
+            _index_k_write_buffer(pool, layer_id),
             out_cache_loc.contiguous(),
             pool.page_size,
             weights,
@@ -2437,7 +2456,7 @@ class Indexer(DSANPUIndexerMixin, BaseFusedOp):
                 )
                 return
 
-            write_buffer = pool.get_index_k_with_scale_write_buffer(layer_id=layer_id)
+            write_buffer = _index_k_write_buffer(pool, layer_id)
             lightop_kvcache.fuse_act_quant_and_store_index_k_cache(
                 key,
                 write_buffer,

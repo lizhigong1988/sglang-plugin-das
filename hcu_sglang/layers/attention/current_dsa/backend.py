@@ -497,7 +497,7 @@ class DeepseekSparseAttnBackend(
         self.kv_cache_dtype = model_runner.kv_cache_dtype
 
         # Unsupported flashmla_sparse_q8 configs must fail at launch, not mid-forward.
-        _validate_flashmla_sparse_q8_backend(
+        _validate_q8_kwargs = dict(
             prefill_impl=self.dsa_prefill_impl,
             decode_impl=self.dsa_decode_impl,
             kv_cache_dtype=self.kv_cache_dtype,
@@ -505,8 +505,26 @@ class DeepseekSparseAttnBackend(
             qk_rope_head_dim=self.qk_rope_head_dim,
             device_sm_major=self.device_sm_major,
             hisparse_enabled=self.hisparse_coordinator is not None,
-            mixed_chunk_enabled=get_schedule().enable_mixed_chunk,
         )
+        # 1be97a0: upstream dropped mixed_chunk_enabled from the validator; keep
+        # the fork's launch-time refusal (q8 prefill is ragged-extend only).
+        if (
+            "mixed_chunk_enabled"
+            in inspect.signature(_validate_flashmla_sparse_q8_backend).parameters
+        ):
+            _validate_q8_kwargs["mixed_chunk_enabled"] = (
+                get_schedule().enable_mixed_chunk
+            )
+        elif (
+            self.dsa_prefill_impl == "flashmla_sparse_q8"
+            and get_schedule().enable_mixed_chunk
+        ):
+            raise ValueError(
+                "--dsa-prefill-backend flashmla_sparse_q8 does not support "
+                "--enable-mixed-chunk: q8 prefill runs on RAGGED extend batches "
+                "only."
+            )
+        _validate_flashmla_sparse_q8_backend(**_validate_q8_kwargs)
 
         if self.dsa_prefill_impl == "triton_sparse_mla":
             _validate_triton_sparse_mla_backend(

@@ -96,7 +96,7 @@ class CompressorBackendMixin:
         token_to_kv_pool = cast('DeepSeekV4TokenToKVPool', token_to_kv_pool)
         kv_score_input = compressor.compute_kv_score(x, forward_batch)
         state_pool = compressor.get_state_pool(self)
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import is_unified_kv_fp8, is_unified_kv_triton
+        from hcu_sglang.utils.env_gate_compat import is_unified_kv_fp8, is_unified_kv_triton
         if token_to_kv_pool.uniform_fp8 and (not compressor.is_in_indexer):
             from sglang.srt.layers.attention.dsv4.compressor_trtllm import forward_compress_uniform_fp8
             forward_compress_uniform_fp8(self, token_to_kv_pool=token_to_kv_pool, kv_score_input=kv_score_input, state_pool=state_pool, compressor=compressor, layer_id=layer_id)

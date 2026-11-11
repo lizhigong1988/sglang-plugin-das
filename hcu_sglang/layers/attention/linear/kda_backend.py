@@ -393,7 +393,10 @@ class _KdaMethods:
                 ]
             )
             if (
-                self.kernel_dispatcher.extend_kernel.uses_state_checkpoints
+                # use_hcu_kda keeps no dispatcher (source Triton kernels,
+                # no FlashInfer state checkpoints).
+                self.kernel_dispatcher is not None
+                and self.kernel_dispatcher.extend_kernel.uses_state_checkpoints
                 and forward_batch.forward_mode.is_extend_without_speculative()
                 and self.forward_metadata.track_ssm_h_src is not None
                 and self.forward_metadata.track_ssm_h_src.numel() > 0
@@ -426,7 +429,7 @@ class _KdaMethods:
                 layer, forward_batch, mixed_qkv, a, b, **kwargs
             )
 
-        layer_cache = self.req_to_token_pool.mamba2_layer_cache(layer.layer_id)
+        layer_cache = self._mamba2_layer_cache(layer.layer_id)
         conv_states = layer_cache.conv[0]
         ssm_states = layer_cache.temporal
         query_start_loc = self.forward_metadata.query_start_loc
@@ -689,7 +692,7 @@ class _KdaMethods:
         if self.prefill_graph_metadata is not None:
             # Breakable prefill CUDA graph bucket: host-free chain on static
             # tables refreshed before each replay.
-            layer_cache = self.req_to_token_pool.mamba2_layer_cache(layer.layer_id)
+            layer_cache = self._mamba2_layer_cache(layer.layer_id)
             return kda_extend_in_graph(
                 layer=layer,
                 meta=self.prefill_graph_metadata,
@@ -704,7 +707,7 @@ class _KdaMethods:
         query_start_loc = self.forward_metadata.query_start_loc
         cache_indices = self.forward_metadata.mamba_cache_indices
 
-        mamba_cache_params = self.req_to_token_pool.mamba2_layer_cache(layer.layer_id)
+        mamba_cache_params = self._mamba2_layer_cache(layer.layer_id)
         conv_states = mamba_cache_params.conv[0].transpose(-1, -2)
 
         ssm_states = mamba_cache_params.temporal
@@ -894,6 +897,15 @@ class _KdaMethods:
 
         return core_attn_out
 
+    def _mamba2_layer_cache(self, layer_id: int):
+        """Fork: request pool delegated to the mamba pool; 1be97a0 upstream
+        keeps mamba2_layer_cache on MambaPool itself."""
+        pool = self.req_to_token_pool
+        _fn = getattr(pool, "mamba2_layer_cache", None)
+        if _fn is None:
+            _fn = pool.mamba_pool.mamba2_layer_cache
+        return _fn(layer_id)
+
     def _hcu_forward_decode(
         self,
         layer: RadixLinearAttention,
@@ -903,7 +915,7 @@ class _KdaMethods:
         b: torch.Tensor,
         **kwargs,
     ):
-        layer_cache = self.req_to_token_pool.mamba2_layer_cache(layer.layer_id)
+        layer_cache = self._mamba2_layer_cache(layer.layer_id)
         conv_states = layer_cache.conv[0]
         ssm_states = layer_cache.temporal
         query_start_loc = self.forward_metadata.query_start_loc
@@ -1001,7 +1013,7 @@ class _KdaMethods:
         retrieve_next_sibling = forward_metadata.retrieve_next_sibling
         retrieve_parent_token = forward_metadata.retrieve_parent_token
 
-        mamba_cache_params = self.req_to_token_pool.mamba2_layer_cache(layer.layer_id)
+        mamba_cache_params = self._mamba2_layer_cache(layer.layer_id)
         conv_states = mamba_cache_params.conv[0].transpose(-1, -2)
 
         ssm_states = mamba_cache_params.temporal
@@ -1195,22 +1207,59 @@ class _BaseMethods:
         self.req_to_token_pool: HybridReqToTokenPool = model_runner.req_to_token_pool
         self.token_to_kv_pool = model_runner.token_to_kv_pool
         self.enable_unified_memory = get_memory().enable_unified_memory
+        # 1be97a0: this mixin's no-arg super() skips the native
+        # HybridLinearAttnBackend.__init__, so replicate its state-pool router
+        # views here — inherited native methods (init_cuda_graph_state &
+        # friends) read self.state_pool / self.state_layer_indices.
+        try:
+            from sglang.srt.mem_cache.kv.decl import STATE_PART
+
+            _router = self.token_to_kv_pool.layer_router
+            self.state_pool = _router.part_view(STATE_PART)
+            self.state_layer_indices = _router.part_indices(STATE_PART)
+        except (ImportError, AttributeError):
+            self.state_pool = getattr(self.req_to_token_pool, "mamba_pool", None)
+            self.state_layer_indices = None
+        # 1be97a0: native _translate_mamba_indices (inherited here) resolves
+        # the allocator id space through runner_ids.state_ids.
+        try:
+            self._state_ids = model_runner.runner_ids.state_ids(
+                self.req_to_token_pool.state_sub_pool
+            )
+        except AttributeError:
+
+            class _IdentityIds:
+                ids = staticmethod(lambda t: t)
+                read_v2p = None
+
+            self._state_ids = _IdentityIds()
         # model_config must not be touched here: backend selection reads the
         # linear_attn_backends stamp first, and that guard test constructs
         # backends on runners without a real model_config.
         self._model_runner = model_runner
         self._mamba_chunk_size: Optional[int] = None
         pool = self.req_to_token_pool
+        # 1be97a0: upstream HybridReqToTokenPool dropped the fork's fusion
+        # probes (mamba_v2p_table / mamba_translate_is_fusable). Fall back to
+        # the fork's semantics: upstream has no v2p table, so fusable reduces
+        # to "translate_mamba_indices is still the stock identity".
+        self._mamba_v2p_table = getattr(pool, "mamba_v2p_table", None)
+        _translate_fusable = getattr(pool, "mamba_translate_is_fusable", None)
+        if _translate_fusable is None:
+            _translate_fusable = (
+                type(pool).translate_mamba_indices
+                is HybridReqToTokenPool.translate_mamba_indices
+            )
         self._fused_state_indices_ok = (
             torch.device(self.device).type == "cuda"
             and isinstance(pool, HybridReqToTokenPool)
-            and pool.mamba_translate_is_fusable
+            and _translate_fusable
         )
         # Keep the original Triton fusion unless HIP C++ is explicitly enabled.
         self._fused_replay_state_indices = fused_replay_state_indices
         if (
             self._fused_state_indices_ok
-            and pool.mamba_v2p_table is None
+            and self._mamba_v2p_table is None
             and get_bool_env_var(
                 "SGLANG_USE_FUSED_REPLAY_STATE_INDICES", default="false"
             )
@@ -1466,6 +1515,10 @@ class _BaseMethods:
         num_padding: Optional[int] = None,
         in_capture: bool = False,
         mamba_track_indices: Optional[torch.Tensor] = None,
+        # 1be97a0: upstream threads the ragged-verify layout through the
+        # replay path; the plugin's mamba replay indices never depend on it.
+        ragged_verify_layout: Optional[object] = None,
+        **_upstream_extra,
     ):
         if num_padding is None:
             if seq_lens_cpu is None:
@@ -1485,7 +1538,7 @@ class _BaseMethods:
                 out_state_indices=self.state_indices_list[bs - 1],
                 valid_bs=bs - int(num_padding),
                 total_bs=bs,
-                v2p=self.req_to_token_pool.mamba_v2p_table,
+                v2p=self._mamba_v2p_table,
             )
         else:
             # Make sure forward metadata is correctly handled for padding reqs
@@ -2002,7 +2055,7 @@ def register_hooks():
     K._run_causal_conv1d_update = _run_causal_conv1d_update
     for name, decorators in [('__init__', [])]:
         setattr(K.KDAKernelDispatcher, name, _bind(vars(_DispatcherMethods)[name], K, K.KDAKernelDispatcher, name, decorators))
-    for name, decorators in [('__init__', []), ('init_forward_metadata', []), ('forward_decode', []), ('forward_extend', []), ('_hcu_forward_decode', []), ('_hcu_forward_extend', [])]:
+    for name, decorators in [('__init__', []), ('init_forward_metadata', []), ('forward_decode', []), ('forward_extend', []), ('_hcu_forward_decode', []), ('_hcu_forward_extend', []), ('_mamba2_layer_cache', [])]:
         setattr(K.KDAAttnBackend, name, _bind(vars(_KdaMethods)[name], K, K.KDAAttnBackend, name, decorators))
     for name, decorators in [('__init__', []), ('_forward_metadata', []), ('init_forward_metadata_capture_cpu_graph', []), ('_replay_metadata', [])]:
         setattr(H.MambaAttnBackendBase, name, _bind(vars(_BaseMethods)[name], H, H.MambaAttnBackendBase, name, decorators))

@@ -1327,7 +1327,7 @@ class MQALayer(MqaAttentionBase):
         )
         kv: Optional[torch.Tensor]
 
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
+        from hcu_sglang.utils.env_gate_compat import (
             is_unified_kv_fp8,
             is_unified_kv_triton,
         )
@@ -1756,7 +1756,7 @@ class MQALayer(MqaAttentionBase):
                 )
             )
         )
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
+        from hcu_sglang.utils.env_gate_compat import (
             is_unified_kv_fp8,
             is_unified_kv_triton,
         )

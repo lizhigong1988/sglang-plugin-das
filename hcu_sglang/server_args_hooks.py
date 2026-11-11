@@ -78,6 +78,25 @@ def after_deepseek_family_overrides(
 def after_dsa_split_backend_resolution(result: dict[str, Any], view: Any):
     if not is_hcu() or view.enable_hisparse:
         return result
+    # Kimi-K3.1: upstream pins triton on HIP, but the head count (96/tp) is
+    # a power of two only when tp carries a factor of 3 — the Triton
+    # sparse-MLA prefill kernel rejects every other tp (e.g. H=48 at tp=2).
+    # Re-pin to the HCU FlashMLA path the plugin's other DSA models use;
+    # post-process passes run after the upstream pin, so this overrides it.
+    try:
+        from sglang.srt.arg_groups.model_override_base import model_config_of
+        from sglang.srt.configs.model_config import is_kimi_k31
+
+        _k31 = is_kimi_k31(model_config_of(view).hf_config)
+    except Exception:
+        _k31 = False
+    if _k31:
+        # flashmla_auto's heuristic can pick flashmla_sparse, whose kernel
+        # rejects the non-power-of-two head count; flashmla_kv pads q heads
+        # to the next supported variant (48 -> 64 on tp=2) instead.
+        result["dsa_prefill_backend"] = "flashmla_kv"
+        result["dsa_decode_backend"] = "flashmla_kv"
+        return result
     if view.dsa_prefill_backend is not None or view.dsa_decode_backend is not None:
         return result
     if view.kv_cache_dtype == "fp8_e4m3":
@@ -284,7 +303,19 @@ def _model_resolution(server_args, previous):
         from hcu_sglang.layer_split_pipeline import adapt_model_adjustments
 
         previous = adapt_model_adjustments(previous)
-    return handle_model_specific_adjustments(previous, server_args)
+    result = handle_model_specific_adjustments(previous, server_args)
+    # 1be97a0 never iterates POST_PROCESS_PASSES (register_post_process is
+    # inert), so the HCU DSA re-pin — including the Kimi-K3.1
+    # triton->flashmla fixup — runs explicitly here, after the upstream
+    # pin inside `previous`.
+    if is_hcu():
+        from sglang.srt.arg_groups.overrides import run_post_process_pass
+
+        def _hcu_dsa_pin(view):
+            return after_dsa_split_backend_resolution({}, view)
+
+        run_post_process_pass(server_args, _hcu_dsa_pin)
+    return result
 
 
 def _attention_resolution(server_args, previous):

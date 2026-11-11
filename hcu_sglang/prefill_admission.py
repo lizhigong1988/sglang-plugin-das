@@ -31,6 +31,46 @@ class _PrefillAdmission:
 
 
 class PrefillAdder(N.PrefillAdder):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Fork's admission reserved unified-pool mamba state slots; 1be97a0's
+        # PrefillAdder dropped the members. Rebuild them in their neutral
+        # fallback shape (no reservation) unless the allocator exposes the
+        # fork's cost ABI.
+        self._mamba_slot_cost = 0
+        self.rem_mamba_slots = None
+        _cost_fn = getattr(self.token_to_kv_pool_allocator, "mamba_slot_full_token_cost", None)
+        if _cost_fn is not None:
+            try:
+                self._mamba_slot_cost = _cost_fn()
+            except Exception:
+                self._mamba_slot_cost = 0
+        if self._mamba_slot_cost:
+            _mamba_alloc = getattr(self.token_to_kv_pool_allocator, "mamba_allocator", None)
+            _available = (
+                _mamba_alloc.schedulable_available_size()
+                if _mamba_alloc is not None
+                else 0
+            )
+            if self.tree_cache.supports_mamba():
+                _available += self.tree_cache.mamba_evictable_size()
+            self.rem_mamba_slots = _available
+
+    def _mamba_gap_budget_for_req(
+        self, req: Req, *, include_host_hit: bool = False
+    ) -> int:
+        """Reserve full-token equivalents for shared-pool Mamba state slots.
+
+        Neutral (0) while no unified-mamba allocator is attached, matching the
+        fork's allocator-absent fallback.
+        """
+        if not self._mamba_slot_cost:
+            return 0
+        slots = int(not req.kv.holds_mamba)
+        if include_host_hit:
+            slots += req.mamba_host_hit_length
+        return slots * self._mamba_slot_cost
+
     def _check_prefill_budget(
         self,
         req: Req,

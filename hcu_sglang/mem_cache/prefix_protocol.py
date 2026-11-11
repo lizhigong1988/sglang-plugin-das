@@ -354,9 +354,7 @@ class _UnifiedMethods:
         writes late-layer window KV only for an extend's tail rows, so a matched
         prefix may lack it; a streaming turn borrowing its own record has it.
         """
-        from sglang.kernels.ops.attention.dsv4.unified_kv_kernels.env_gate import (
-            is_unified_kv_triton,
-        )
+        from hcu_sglang.utils.env_gate_compat import is_unified_kv_triton
 
         swa = self.components.get(ComponentType.SWA)
         if swa is None or not swa.sliding_window_size:

@@ -314,6 +314,10 @@ def build_kv_cache(
     dynamo_kv_event_format: bool = False,
     kv_event_lora_names: Optional[KvEventLoraNames] = None,
     draft_swa_window: int = 0,
+    # 1be97a0: upstream threads draft window retention through the builder;
+    # accept it and best-effort bind when the storage ABI is present.
+    draft_window_reaches: Optional[dict] = None,
+    **_upstream_extra,  # tolerate kwargs added by newer upstream pins
 ) -> KVCacheBuildResult:
     parallel = get_parallel()
     sliding_window_size: Optional[int] = None
@@ -468,6 +472,15 @@ def build_kv_cache(
             params.swa_retain_window,
             sliding_window_size,
         )
+    if draft_window_reaches is not None:
+        try:
+            from sglang.srt.mem_cache.kv_cache_builder import kv_storage_of
+
+            kv_storage_of(
+                req_to_token_pool, token_to_kv_pool_allocator
+            ).bind_window_retention(sliding_window_size, draft_window_reaches)
+        except (ImportError, AttributeError):
+            pass
 
     tree_context = TreeCacheBuildContext(
         server_args=server_args,

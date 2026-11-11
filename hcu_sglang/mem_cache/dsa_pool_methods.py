@@ -53,6 +53,8 @@ def __init__(
     skip_topk_layers: N.Optional[N.List[bool]] = None,
     indexer_layer_ids: N.Optional[typing.Sequence[int]] = None,
     dcp_replicated: bool = False,
+    kv_scale_ue8m0: N.Optional[object] = None,  # 1be97a0; native path handles ue8m0 scales
+    **_upstream_extra,  # tolerate kwargs added by newer upstream pins
 ):
     override_dim = (
         kv_cache_dim if kv_cache_dim != kv_lora_rank + qk_rope_head_dim else None

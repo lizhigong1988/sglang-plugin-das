@@ -25,6 +25,10 @@ If you only need to use the distributed environment without model/pipeline
 
 from __future__ import annotations
 
+# NOTE: distributed_backend.register_hooks rebinds these functions with
+# vars(parallel_state) as globals — keep every referenced name either local
+# or present in that module's namespace; no module-level helpers here.
+
 def _reduce_scatter_tensor(
     self,
     output: torch.Tensor,
@@ -112,7 +116,9 @@ def _maybe_aiter_reduce_scatter(
         if torch.cuda.is_current_stream_capturing():
             if (
                 envs.SGLANG_MEMORY_SAVER_CUDA_GRAPH.get()
-                or _AITER_CAPTURE_COPY_IN
+                or get_bool_env_var(
+                    "SGLANG_AITER_CAPTURE_COPY_IN", default="false"
+                )
                 or not getattr(ca_comm, "enable_register_for_capturing", True)
             ):
                 ca_comm.reduce_scatter(input, output, registered=False)
@@ -205,7 +211,9 @@ def _all_gather_into_tensor(self, output: torch.Tensor, input: torch.Tensor):
             if torch.cuda.is_current_stream_capturing():
                 if (
                     envs.SGLANG_MEMORY_SAVER_CUDA_GRAPH.get()
-                    or _AITER_CAPTURE_COPY_IN
+                    or get_bool_env_var(
+                        "SGLANG_AITER_CAPTURE_COPY_IN", default="false"
+                    )
                     or _is_hcu
                     or not getattr(ca_comm, "enable_register_for_capturing", True)
                 ):
@@ -275,14 +283,25 @@ def all_gather(
         f"Invalid dim ({dim}) for input tensor with shape {input_.size()}"
     )
 
-    # For HPUs, use HPU communicator.
+    # For HPUs, use HPU communicator. 1be97a0: upstream ships inert
+    # communicator stubs (HPU/NPU) whose ``disabled`` property RAISES on
+    # non-matching platforms — treat that as disabled. Kept inline: these
+    # functions execute under parallel_state globals when hooked.
     hpu_comm = self.hpu_communicator
-    if hpu_comm is not None and not hpu_comm.disabled:
+    try:
+        hpu_disabled = hpu_comm is None or bool(hpu_comm.disabled)
+    except Exception:
+        hpu_disabled = True
+    if not hpu_disabled:
         return hpu_comm.all_gather(input_, dim)
 
     # For NPUs, use NPU communicator.
     npu_comm = self.npu_communicator
-    if npu_comm is not None and not npu_comm.disabled:
+    try:
+        npu_disabled = npu_comm is None or bool(npu_comm.disabled)
+    except Exception:
+        npu_disabled = True
+    if not npu_disabled:
         return npu_comm.all_gather(input_, dim)
 
     if dim < 0:

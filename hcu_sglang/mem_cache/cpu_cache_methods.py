@@ -887,7 +887,8 @@ class MambaComponent:
                 )
             else:
                 active_value = req.kv.mamba_pool_idx.unsqueeze(-1).clone()
-            if self.int8_ckpt_pool is not None:
+            # fork-only int8 checkpoint pool; 1be97a0's MambaComponent has none.
+            if getattr(self, "int8_ckpt_pool", None) is not None:
                 insert_params.mamba_value = self._commit_int8_checkpoint(active_value)
             else:
                 insert_params.mamba_value = active_value
@@ -896,7 +897,7 @@ class MambaComponent:
             if cache_len is None:
                 return 0
             # Donate the mamba index to the radix cache instead of copying.
-            if self.int8_ckpt_pool is not None:
+            if getattr(self, "int8_ckpt_pool", None) is not None:
                 if self.cache.enable_mamba_extra_buffer:
                     new_slot = self._alloc_mamba_slot(req)
                     src_active = (

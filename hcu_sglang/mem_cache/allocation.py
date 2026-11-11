@@ -125,7 +125,11 @@ def around_alloc_extend(
             num_new_pages,
         )
 
-    from sglang.srt.utils import get_num_new_pages
+    # 1be97a0 moved it to mem_cache.utils.
+    try:
+        from sglang.srt.mem_cache.utils import get_num_new_pages
+    except ImportError:
+        from sglang.srt.utils import get_num_new_pages
 
     if allocator.debug_mode:
         assert torch.all(
@@ -197,7 +201,11 @@ def around_alloc_decode(
             last_loc,
         )
 
-    from sglang.srt.utils import get_num_new_pages
+    # 1be97a0 moved it to mem_cache.utils.
+    try:
+        from sglang.srt.mem_cache.utils import get_num_new_pages
+    except ImportError:
+        from sglang.srt.utils import get_num_new_pages
 
     if allocator.debug_mode:
         assert torch.all(

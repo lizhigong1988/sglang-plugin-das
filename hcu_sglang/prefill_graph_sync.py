@@ -112,6 +112,10 @@ class ScheduleBatch(_NativeScheduleBatch):
         mamba_track_mask_cpu = []
         mamba_track_indices_cpu = []
         mamba_track_seqlens_cpu = []
+        # fork entries carry pre-resolved ping-pong slot ids (track_index);
+        # 1be97a0 entries carry positions that must go through the pool
+        # mapping gather below.
+        mamba_track_positions_pending = False
 
         for i, (req, seq_len, pre_len) in enumerate(zip(reqs, seq_lens, prefix_lens)):
             req.extend_batch_idx += 1
@@ -178,8 +182,18 @@ class ScheduleBatch(_NativeScheduleBatch):
             if SB.get_exec().mamba.enable_mamba_extra_buffer:
                 track_entry = self._mamba_radix_cache_v2_req_prepare_for_extend(req)
                 mamba_track_mask_cpu.append(track_entry.track_mask)
-                mamba_track_indices_cpu.append(track_entry.track_index)
                 mamba_track_seqlens_cpu.append(track_entry.track_seqlen)
+                # 1be97a0 dropped track_index from the entry; collect the
+                # position and resolve the ping-pong slot id via the pool
+                # mapping at batch level below.
+                _track_idx = getattr(track_entry, "track_index", None)
+                if _track_idx is None:
+                    mamba_track_positions_pending = True
+                    mamba_track_indices_cpu.append(
+                        int(track_entry.track_position)
+                    )
+                else:
+                    mamba_track_indices_cpu.append(int(_track_idx))
 
             if self.return_logprob:
                 # Find input logprob token ids.
@@ -286,11 +300,30 @@ class ScheduleBatch(_NativeScheduleBatch):
         if SB.get_exec().mamba.enable_mamba_extra_buffer:
             self.mamba_prefill_track_mask_cpu = mamba_track_mask_cpu
             self.mamba_track_seqlens_cpu = mamba_track_seqlens_cpu
-            self.mamba_track_indices = SB.torch.tensor(
-                mamba_track_indices_cpu,
-                dtype=SB.torch.int64,
-                device=self.device,
-            )
+            # Positions (fork: pre-resolved ids) -> ping-pong slot ids via
+            # the device mapping, matching upstream's batch-level gather.
+            if mamba_track_positions_pending:
+                _mapping = (
+                    self.req_to_token_pool
+                    .req_index_to_mamba_ping_pong_track_buffer_mapping
+                )
+                _positions = SB.torch.tensor(
+                    mamba_track_indices_cpu,
+                    dtype=SB.torch.int64,
+                    device=self.device,
+                )
+                _gathered = _mapping[
+                    self.req_pool_indices, _positions.clamp(min=0)
+                ]
+                self.mamba_track_indices = SB.torch.where(
+                    _positions >= 0, _gathered, 0
+                )
+            else:
+                self.mamba_track_indices = SB.torch.tensor(
+                    mamba_track_indices_cpu,
+                    dtype=SB.torch.int64,
+                    device=self.device,
+                )
             self.mamba_track_mask = SB.torch.tensor(
                 mamba_track_mask_cpu,
                 dtype=SB.torch.bool,
@@ -651,7 +684,7 @@ class ScheduleBatch(_NativeScheduleBatch):
         # merge_batch historically mutated the list in place; they now rebind
         # new lists, but the slice stays so this snapshot never aliases the
         # original.
-        return SB.ScheduleBatch(
+        copy_kwargs = dict(
             reqs=self.reqs[:],
             extend_lens=self.extend_lens,
             prefix_lens=self.prefix_lens,
@@ -694,13 +727,20 @@ class ScheduleBatch(_NativeScheduleBatch):
             dp_cooperation_info=self.dp_cooperation_info,
             dp_balance_stats=self.dp_balance_stats,
             prefill_stats=self.prefill_stats,
-            fpm_start_time=self.fpm_start_time,
             forward_iter=self.forward_iter,
             launch_ts=self.launch_ts,
             after_idle_gap=self.after_idle_gap,
-            split_prefill_start=self.split_prefill_start,
             extend_num_tokens=self.extend_num_tokens,
         )
+        # Cross-pin field drift: fpm_start_time/split_prefill_start are
+        # fork-only, launched_reqs is 1be97a0-only (drop_inflight_step walks
+        # the copy's tuple in the overlap result queue). Forward whatever the
+        # constructing dataclass declares.
+        _sb_fields = getattr(SB.ScheduleBatch, "__dataclass_fields__", {})
+        for _opt in ("fpm_start_time", "split_prefill_start", "launched_reqs"):
+            if _opt in _sb_fields:
+                copy_kwargs[_opt] = getattr(self, _opt, None)
+        return SB.ScheduleBatch(**copy_kwargs)
 
 
 

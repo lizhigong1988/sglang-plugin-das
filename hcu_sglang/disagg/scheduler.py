@@ -27,6 +27,23 @@ def init_disaggregation(self):
     self.disagg_prefill_inflight_queue = None
     self.disagg_decode_prealloc_queue = None
     self.disagg_decode_transfer_queue = None
+    # 1be97a0: upstream request_lists() reads the PD-sending list
+    # unconditionally; keep it present even outside PD prefill.
+    try:
+        self.disagg_prefill_transfer_queue = native.IndexedReqList(
+            native.ListKind.PD_SENDING,
+            abort=getattr(self, "_abort_prefill_transfer", None),
+        )
+    except AttributeError:
+        from sglang.srt.managers.scheduler_components.request_list import (
+            IndexedReqList,
+            ListKind,
+        )
+
+        self.disagg_prefill_transfer_queue = IndexedReqList(
+            ListKind.PD_SENDING,
+            abort=getattr(self, "_abort_prefill_transfer", None),
+        )
 
     self.disaggregation_mode = native.DisaggregationMode(native.get_disagg().disaggregation_mode)
     self.transfer_backend = native.TransferBackend(

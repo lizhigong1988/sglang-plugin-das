@@ -98,22 +98,33 @@ def forward_batch_generation(
                     else tail.late_layer_tail.extend_seq_lens_cpu
                 ),
             )
-        batch_result = N.GenerationBatchResult(
+        batch_result_kwargs = dict(
             logits_output=logits_output,
             can_run_cuda_graph=can_run_cuda_graph,
             expert_distribution_metrics=out.expert_distribution_metrics,
             routed_experts_output=out.routed_experts_output,
             indexer_topk_output=out.indexer_topk_output,
-            kv_loc_plan=(
-                None
-                if not return_kv_loc_plan
-                # A folded forward also wrote the replay rows; the caller's
-                # plan covers the batch it scheduled.
-                else forward_batch.kv_loc_plan
-                if folded is None
-                else self.model_runner.kv_index_translator.own_plan(batch)
-            ),
         )
+        if return_kv_loc_plan and "kv_loc_plan" in getattr(
+            N.GenerationBatchResult, "__dataclass_fields__", {}
+        ):
+            # fork-only result field; 1be97a0 dropped it (plans live on
+            # forward_batch.iteration_ids now). A folded forward also wrote
+            # the replay rows; the caller's plan covers the batch it
+            # scheduled.
+            _translator = getattr(
+                self.model_runner, "kv_index_translator", None
+            )
+            batch_result_kwargs["kv_loc_plan"] = (
+                getattr(forward_batch, "kv_loc_plan", None)
+                if folded is None
+                else (
+                    _translator
+                    if _translator is not None
+                    else self.model_runner.runner_ids
+                ).own_plan(batch)
+            )
+        batch_result = N.GenerationBatchResult(**batch_result_kwargs)
 
         N.capture_pre_sample_logits(batch, forward_batch, logits_output)
 
